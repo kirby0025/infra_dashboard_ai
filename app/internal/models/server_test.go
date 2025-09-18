@@ -10,8 +10,7 @@ func TestServerJSONMarshal(t *testing.T) {
 	server := Server{
 		ID:        1,
 		Name:      "test-server",
-		OS:        "Ubuntu",
-		OSVersion: "22.04 LTS",
+		OSID:      28,
 		CreatedAt: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
@@ -21,14 +20,14 @@ func TestServerJSONMarshal(t *testing.T) {
 		t.Fatalf("Failed to marshal server to JSON: %v", err)
 	}
 
-	expected := `{"id":1,"name":"test-server","os":"Ubuntu","os_version":"22.04 LTS","created_at":"2024-01-01T12:00:00Z","updated_at":"2024-01-01T12:00:00Z"}`
+	expected := `{"id":1,"name":"test-server","os_id":28,"created_at":"2024-01-01T12:00:00Z","updated_at":"2024-01-01T12:00:00Z"}`
 	if string(jsonData) != expected {
 		t.Errorf("JSON marshal result mismatch.\nExpected: %s\nGot: %s", expected, string(jsonData))
 	}
 }
 
 func TestServerJSONUnmarshal(t *testing.T) {
-	jsonData := `{"id":1,"name":"test-server","os":"Ubuntu","os_version":"22.04 LTS","created_at":"2024-01-01T12:00:00Z","updated_at":"2024-01-01T12:00:00Z"}`
+	jsonData := `{"id":1,"name":"test-server","os_id":28,"created_at":"2024-01-01T12:00:00Z","updated_at":"2024-01-01T12:00:00Z"}`
 
 	var server Server
 	err := json.Unmarshal([]byte(jsonData), &server)
@@ -42,11 +41,8 @@ func TestServerJSONUnmarshal(t *testing.T) {
 	if server.Name != "test-server" {
 		t.Errorf("Expected name 'test-server', got '%s'", server.Name)
 	}
-	if server.OS != "Ubuntu" {
-		t.Errorf("Expected OS 'Ubuntu', got '%s'", server.OS)
-	}
-	if server.OSVersion != "22.04 LTS" {
-		t.Errorf("Expected OSVersion '22.04 LTS', got '%s'", server.OSVersion)
+	if server.OSID != 28 {
+		t.Errorf("Expected OSID 28, got %d", server.OSID)
 	}
 }
 
@@ -59,36 +55,24 @@ func TestCreateServerRequestValidation(t *testing.T) {
 		{
 			name: "valid request",
 			request: CreateServerRequest{
-				Name:      "web-server-01",
-				OS:        "Ubuntu",
-				OSVersion: "22.04 LTS",
+				Name: "web-server-01",
+				OSID: 28,
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty name",
 			request: CreateServerRequest{
-				Name:      "",
-				OS:        "Ubuntu",
-				OSVersion: "22.04 LTS",
+				Name: "",
+				OSID: 28,
 			},
 			wantErr: true,
 		},
 		{
-			name: "empty OS",
+			name: "invalid OS ID",
 			request: CreateServerRequest{
-				Name:      "web-server-01",
-				OS:        "",
-				OSVersion: "22.04 LTS",
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty OS version",
-			request: CreateServerRequest{
-				Name:      "web-server-01",
-				OS:        "Ubuntu",
-				OSVersion: "",
+				Name: "web-server-01",
+				OSID: 0,
 			},
 			wantErr: true,
 		},
@@ -96,7 +80,7 @@ func TestCreateServerRequestValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasEmptyField := tt.request.Name == "" || tt.request.OS == "" || tt.request.OSVersion == ""
+			hasEmptyField := tt.request.Name == "" || tt.request.OSID == 0
 			if hasEmptyField != tt.wantErr {
 				t.Errorf("CreateServerRequest validation mismatch. Expected error: %v, but validation result: %v", tt.wantErr, hasEmptyField)
 			}
@@ -106,9 +90,8 @@ func TestCreateServerRequestValidation(t *testing.T) {
 
 func TestUpdateServerRequestJSON(t *testing.T) {
 	request := UpdateServerRequest{
-		Name:      "updated-server",
-		OS:        "CentOS",
-		OSVersion: "8.5",
+		Name: "updated-server",
+		OSID: 32,
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -125,11 +108,8 @@ func TestUpdateServerRequestJSON(t *testing.T) {
 	if unmarshaledRequest.Name != request.Name {
 		t.Errorf("Expected name '%s', got '%s'", request.Name, unmarshaledRequest.Name)
 	}
-	if unmarshaledRequest.OS != request.OS {
-		t.Errorf("Expected OS '%s', got '%s'", request.OS, unmarshaledRequest.OS)
-	}
-	if unmarshaledRequest.OSVersion != request.OSVersion {
-		t.Errorf("Expected OSVersion '%s', got '%s'", request.OSVersion, unmarshaledRequest.OSVersion)
+	if unmarshaledRequest.OSID != request.OSID {
+		t.Errorf("Expected OSID %d, got %d", request.OSID, unmarshaledRequest.OSID)
 	}
 }
 
@@ -146,10 +126,7 @@ func TestUpdateServerRequestPartialUpdate(t *testing.T) {
 	if request.Name != "partial-update" {
 		t.Errorf("Expected name 'partial-update', got '%s'", request.Name)
 	}
-	if request.OS != "" {
-		t.Errorf("Expected empty OS, got '%s'", request.OS)
-	}
-	if request.OSVersion != "" {
-		t.Errorf("Expected empty OSVersion, got '%s'", request.OSVersion)
+	if request.OSID != 0 {
+		t.Errorf("Expected empty OSID, got %d", request.OSID)
 	}
 }

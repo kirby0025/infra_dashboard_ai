@@ -14,12 +14,13 @@ import (
 
 // ServerHandler handles server-related HTTP requests
 type ServerHandler struct {
-	repo *database.ServerRepository
+	repo   *database.ServerRepository
+	osRepo *database.OSRepository
 }
 
 // NewServerHandler creates a new server handler
-func NewServerHandler(repo *database.ServerRepository) *ServerHandler {
-	return &ServerHandler{repo: repo}
+func NewServerHandler(repo *database.ServerRepository, osRepo *database.OSRepository) *ServerHandler {
+	return &ServerHandler{repo: repo, osRepo: osRepo}
 }
 
 // GetServers handles GET /servers - retrieves all servers
@@ -78,8 +79,8 @@ func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Basic validation
-	if req.Name == "" || req.OS == "" || req.OSVersion == "" {
-		http.Error(w, "Name, OS, and OS version are required", http.StatusBadRequest)
+	if req.Name == "" || req.OSID == 0 {
+		http.Error(w, "Name and OS ID are required", http.StatusBadRequest)
 		return
 	}
 
@@ -156,6 +157,68 @@ func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetComplianceReport handles GET /servers/compliance - generates compliance report
+func (h *ServerHandler) GetComplianceReport(w http.ResponseWriter, r *http.Request) {
+	// Get all servers with OS information
+	servers, err := h.repo.GetAll()
+	if err != nil {
+		log.Printf("Error getting servers for compliance report: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate compliance report using utility functions
+	complianceUtils := models.NewComplianceUtils()
+	report := complianceUtils.GenerateComplianceReport(servers)
+
+	// Get all OS data for recommendations
+	allOS, err := h.osRepo.GetAll()
+	if err != nil {
+		log.Printf("Error getting OS data for recommendations: %v", err)
+		// Continue without recommendations rather than failing
+		allOS = []models.OS{}
+	}
+
+	// Add recommendations to the report
+	recommendations := complianceUtils.GetRecommendations(servers, allOS)
+
+	// Create extended report with compliance score and recommendations
+	extendedReport := struct {
+		models.ComplianceReport
+		ComplianceScore  float64  `json:"compliance_score"`
+		Recommendations  []string `json:"recommendations"`
+		ScoreDescription string   `json:"score_description"`
+	}{
+		ComplianceReport: report,
+		ComplianceScore:  complianceUtils.GetComplianceScore(servers),
+		Recommendations:  recommendations,
+		ScoreDescription: getScoreDescription(complianceUtils.GetComplianceScore(servers)),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(extendedReport); err != nil {
+		log.Printf("Error encoding compliance report response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getScoreDescription provides human-readable description for compliance scores
+func getScoreDescription(score float64) string {
+	switch {
+	case score >= 90:
+		return "Excellent - Infrastructure is well maintained and compliant"
+	case score >= 75:
+		return "Good - Minor compliance issues that should be addressed"
+	case score >= 50:
+		return "Fair - Several compliance issues requiring attention"
+	case score >= 25:
+		return "Poor - Significant compliance issues need immediate action"
+	default:
+		return "Critical - Infrastructure has serious compliance problems"
+	}
 }
 
 // HealthCheck handles GET /health - simple health check endpoint

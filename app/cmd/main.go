@@ -28,11 +28,13 @@ func main() {
 		log.Fatalf("Failed to create tables: %v", err)
 	}
 
-	// Initialize repository
+	// Initialize repositories
 	serverRepo := database.NewServerRepository(db)
+	osRepo := database.NewOSRepository(db)
 
 	// Initialize handlers
-	serverHandler := handlers.NewServerHandler(serverRepo)
+	serverHandler := handlers.NewServerHandler(serverRepo, osRepo)
+	osHandler := handlers.NewOSHandler(osRepo)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -46,6 +48,14 @@ func main() {
 	api.HandleFunc("/servers/{id:[0-9]+}", serverHandler.GetServer).Methods("GET")
 	api.HandleFunc("/servers/{id:[0-9]+}", serverHandler.UpdateServer).Methods("PUT")
 	api.HandleFunc("/servers/{id:[0-9]+}", serverHandler.DeleteServer).Methods("DELETE")
+	api.HandleFunc("/servers/compliance", serverHandler.GetComplianceReport).Methods("GET")
+
+	// Operating System routes
+	api.HandleFunc("/os", osHandler.GetOperatingSystems).Methods("GET")
+	api.HandleFunc("/os", osHandler.CreateOperatingSystem).Methods("POST")
+	api.HandleFunc("/os/{id:[0-9]+}", osHandler.GetOperatingSystem).Methods("GET")
+	api.HandleFunc("/os/{id:[0-9]+}", osHandler.UpdateOperatingSystem).Methods("PUT")
+	api.HandleFunc("/os/{id:[0-9]+}", osHandler.DeleteOperatingSystem).Methods("DELETE")
 
 	// Health check
 	router.HandleFunc("/health", serverHandler.HealthCheck).Methods("GET")

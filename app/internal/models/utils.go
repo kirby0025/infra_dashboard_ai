@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -317,7 +318,7 @@ func (u *ComplianceUtils) GetRecommendations(servers []Server, allOS []OS) []str
 
 	// For each server, check if there's an OS in the same family with a later EndOfSupport date
 	osUpgradeNeeded := make(map[string]struct {
-		count         int
+		serverNames   []string
 		currentOS     string
 		recommendedOS string
 	})
@@ -344,15 +345,15 @@ func (u *ComplianceUtils) GetRecommendations(servers []Server, allOS []OS) []str
 			if bestOS != nil && bestOS.EndOfSupport.After(server.OS.EndOfSupport) {
 				bestOSKey := fmt.Sprintf("%s %s", bestOS.Name, bestOS.Version)
 				if entry, exists := osUpgradeNeeded[osKey]; exists {
-					entry.count++
+					entry.serverNames = append(entry.serverNames, server.Name)
 					osUpgradeNeeded[osKey] = entry
 				} else {
 					osUpgradeNeeded[osKey] = struct {
-						count         int
+						serverNames   []string
 						currentOS     string
 						recommendedOS string
 					}{
-						count:         1,
+						serverNames:   []string{server.Name},
 						currentOS:     osKey,
 						recommendedOS: bestOSKey,
 					}
@@ -363,9 +364,10 @@ func (u *ComplianceUtils) GetRecommendations(servers []Server, allOS []OS) []str
 
 	// Generate recommendations from the collected data
 	for _, upgrade := range osUpgradeNeeded {
+		serverList := fmt.Sprintf("[%s]", strings.Join(upgrade.serverNames, ", "))
 		recommendations = append(recommendations,
-			fmt.Sprintf("SUGGESTION: Consider upgrading %d servers from %s to %s",
-				upgrade.count, upgrade.currentOS, upgrade.recommendedOS))
+			fmt.Sprintf("SUGGESTION: Consider upgrading servers %s from %s to %s",
+				serverList, upgrade.currentOS, upgrade.recommendedOS))
 	}
 
 	return recommendations

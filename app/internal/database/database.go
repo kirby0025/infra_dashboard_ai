@@ -515,3 +515,141 @@ func (r *OSRepository) Delete(id int) error {
 
 	return nil
 }
+
+// ChangeHistoryRepository provides database operations for server change history
+type ChangeHistoryRepository struct {
+	db *DB
+}
+
+// NewChangeHistoryRepository creates a new change history repository
+func NewChangeHistoryRepository(db *DB) *ChangeHistoryRepository {
+	return &ChangeHistoryRepository{db: db}
+}
+
+// GetAll retrieves all change history records with optional filters
+func (r *ChangeHistoryRepository) GetAll(filter *models.ChangeHistoryFilter) ([]models.ServerChangeHistory, error) {
+	query := `
+		SELECT id, server_id, server_name, change_type,
+		       old_os_id, new_os_id, old_os_name, old_os_version,
+		       new_os_name, new_os_version, changed_at
+		FROM server_change_history
+		WHERE 1=1
+	`
+	args := []interface{}{}
+	argCount := 1
+
+	// Apply filters
+	if filter != nil {
+		if filter.ServerID != nil {
+			query += fmt.Sprintf(" AND server_id = $%d", argCount)
+			args = append(args, *filter.ServerID)
+			argCount++
+		}
+		if filter.ChangeType != nil {
+			query += fmt.Sprintf(" AND change_type = $%d", argCount)
+			args = append(args, *filter.ChangeType)
+			argCount++
+		}
+		if filter.StartDate != nil {
+			query += fmt.Sprintf(" AND changed_at >= $%d", argCount)
+			args = append(args, *filter.StartDate)
+			argCount++
+		}
+		if filter.EndDate != nil {
+			query += fmt.Sprintf(" AND changed_at <= $%d", argCount)
+			args = append(args, *filter.EndDate)
+			argCount++
+		}
+	}
+
+	query += " ORDER BY changed_at DESC"
+
+	// Apply pagination
+	if filter != nil && filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d", argCount)
+		args = append(args, filter.Limit)
+		argCount++
+	}
+	if filter != nil && filter.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", argCount)
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query change history: %w", err)
+	}
+	defer rows.Close()
+
+	var history []models.ServerChangeHistory
+	for rows.Next() {
+		var record models.ServerChangeHistory
+		err := rows.Scan(
+			&record.ID,
+			&record.ServerID,
+			&record.ServerName,
+			&record.ChangeType,
+			&record.OldOSID,
+			&record.NewOSID,
+			&record.OldOSName,
+			&record.OldOSVersion,
+			&record.NewOSName,
+			&record.NewOSVersion,
+			&record.ChangedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan change history row: %w", err)
+		}
+		history = append(history, record)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return history, nil
+}
+
+// GetByServerID retrieves change history for a specific server
+func (r *ChangeHistoryRepository) GetByServerID(serverID int, limit int) ([]models.ServerChangeHistory, error) {
+	filter := &models.ChangeHistoryFilter{
+		ServerID: &serverID,
+		Limit:    limit,
+	}
+	return r.GetAll(filter)
+}
+
+// GetByID retrieves a single change history record by its ID
+func (r *ChangeHistoryRepository) GetByID(id int) (*models.ServerChangeHistory, error) {
+	query := `
+		SELECT id, server_id, server_name, change_type,
+		       old_os_id, new_os_id, old_os_name, old_os_version,
+		       new_os_name, new_os_version, changed_at
+		FROM server_change_history
+		WHERE id = $1
+	`
+
+	var record models.ServerChangeHistory
+	err := r.db.QueryRow(query, id).Scan(
+		&record.ID,
+		&record.ServerID,
+		&record.ServerName,
+		&record.ChangeType,
+		&record.OldOSID,
+		&record.NewOSID,
+		&record.OldOSName,
+		&record.OldOSVersion,
+		&record.NewOSName,
+		&record.NewOSVersion,
+		&record.ChangedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("change history record with id %d not found", id)
+		}
+		return nil, fmt.Errorf("failed to get change history record: %w", err)
+	}
+
+	return &record, nil
+}

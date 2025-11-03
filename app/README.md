@@ -9,6 +9,7 @@ A comprehensive REST API for managing server infrastructure and operating system
 - **Relational Data Model**: Normalized database design with foreign key relationships
 - **Compliance Reporting**: Automated compliance analysis and recommendations
 - **End-of-Life Tracking**: Monitor OS support status and plan upgrades
+- **Change History Tracking**: Automatic audit trail for all server changes (creation, OS updates, deletion)
 - **JSON API**: RESTful API with comprehensive error handling
 - **PostgreSQL Storage**: Robust data persistence with referential integrity
 - **Environment Configuration**: Flexible configuration management
@@ -247,6 +248,10 @@ cd internal/models && go test -v
 # Run integration tests using the test script
 chmod +x test_api.sh
 ./test_api.sh
+
+# Run change history tests
+chmod +x test_change_history.sh
+./test_change_history.sh
 ```
 
 ### Test Coverage
@@ -286,7 +291,9 @@ app/
 ├── init.sql                       # Database schema and seed data
 ├── Makefile                       # Build and development commands
 ├── test_api.sh                    # API integration test script
+├── test_change_history.sh         # Change history test script
 ├── API_REFERENCE.md               # Comprehensive API documentation
+├── CHANGE_HISTORY.md              # Change history documentation
 ├── SERVER_OS_RELATIONSHIP.md     # Technical relationship documentation
 ├── USAGE_EXAMPLES.md              # Practical usage examples
 ├── LOGGING_STANDARDS.md           # Logging guidelines

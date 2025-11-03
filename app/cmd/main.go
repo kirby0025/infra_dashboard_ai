@@ -31,10 +31,12 @@ func main() {
 	// Initialize repositories
 	serverRepo := database.NewServerRepository(db)
 	osRepo := database.NewOSRepository(db)
+	changeHistoryRepo := database.NewChangeHistoryRepository(db)
 
 	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(serverRepo, osRepo)
 	osHandler := handlers.NewOSHandler(osRepo)
+	changeHistoryHandler := handlers.NewChangeHistoryHandler(changeHistoryRepo)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -56,6 +58,11 @@ func main() {
 	api.HandleFunc("/os/{id:[0-9]+}", osHandler.GetOperatingSystem).Methods("GET")
 	api.HandleFunc("/os/{id:[0-9]+}", osHandler.UpdateOperatingSystem).Methods("PUT")
 	api.HandleFunc("/os/{id:[0-9]+}", osHandler.DeleteOperatingSystem).Methods("DELETE")
+
+	// Change History routes
+	api.HandleFunc("/history", changeHistoryHandler.GetChangeHistory).Methods("GET")
+	api.HandleFunc("/history/{id:[0-9]+}", changeHistoryHandler.GetChangeHistoryByID).Methods("GET")
+	api.HandleFunc("/servers/{id:[0-9]+}/history", changeHistoryHandler.GetServerChangeHistory).Methods("GET")
 
 	// Health check
 	router.HandleFunc("/health", serverHandler.HealthCheck).Methods("GET")

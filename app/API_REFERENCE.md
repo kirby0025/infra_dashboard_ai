@@ -522,6 +522,154 @@ Currently, no rate limiting is implemented. For production use, consider impleme
 
 The current API does not implement pagination. For large datasets, pagination should be added to the list endpoints.
 
+---
+
+## Change History Endpoints
+
+### GET /api/v1/history
+
+Retrieve all server change history records with optional filtering.
+
+**Query Parameters:**
+- `server_id` (optional) - Filter by specific server ID
+- `change_type` (optional) - Filter by change type: `created`, `os_changed`, or `deleted`
+- `start_date` (optional) - Filter changes from this date (format: YYYY-MM-DD)
+- `end_date` (optional) - Filter changes until this date (format: YYYY-MM-DD)
+- `limit` (optional, default: 100) - Maximum number of records to return
+- `offset` (optional, default: 0) - Number of records to skip for pagination
+
+**Example Request:**
+```bash
+curl "http://localhost:8080/api/v1/history?change_type=os_changed&limit=10"
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 15,
+    "server_id": 3,
+    "server_name": "web-server-01",
+    "change_type": "os_changed",
+    "old_os_id": 28,
+    "new_os_id": 29,
+    "old_os_name": "Ubuntu",
+    "old_os_version": "20.04",
+    "new_os_name": "Ubuntu",
+    "new_os_version": "22.04",
+    "changed_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+---
+
+### GET /api/v1/servers/{id}/history
+
+Retrieve change history for a specific server.
+
+**Path Parameters:**
+- `id` - Server ID (required)
+
+**Query Parameters:**
+- `limit` (optional, default: 50) - Maximum number of records to return
+
+**Example Request:**
+```bash
+curl "http://localhost:8080/api/v1/servers/3/history"
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 15,
+    "server_id": 3,
+    "server_name": "web-server-01",
+    "change_type": "os_changed",
+    "old_os_id": 28,
+    "new_os_id": 29,
+    "old_os_name": "Ubuntu",
+    "old_os_version": "20.04",
+    "new_os_name": "Ubuntu",
+    "new_os_version": "22.04",
+    "changed_at": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": 1,
+    "server_id": 3,
+    "server_name": "web-server-01",
+    "change_type": "created",
+    "old_os_id": null,
+    "new_os_id": 28,
+    "old_os_name": null,
+    "old_os_version": null,
+    "new_os_name": "Ubuntu",
+    "new_os_version": "20.04",
+    "changed_at": "2024-01-01T08:00:00Z"
+  }
+]
+```
+
+---
+
+### GET /api/v1/history/{id}
+
+Retrieve a specific change history record by its ID.
+
+**Path Parameters:**
+- `id` - Change history record ID (required)
+
+**Example Request:**
+```bash
+curl "http://localhost:8080/api/v1/history/15"
+```
+
+**Response:**
+```json
+{
+  "id": 15,
+  "server_id": 3,
+  "server_name": "web-server-01",
+  "change_type": "os_changed",
+  "old_os_id": 28,
+  "new_os_id": 29,
+  "old_os_name": "Ubuntu",
+  "old_os_version": "20.04",
+  "new_os_name": "Ubuntu",
+  "new_os_version": "22.04",
+  "changed_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid history record ID
+- `500 Internal Server Error` - Failed to retrieve record
+
+---
+
+## Change History Types
+
+The system automatically tracks three types of changes:
+
+### 1. Created
+Recorded when a new server is added.
+- `old_os_id`, `old_os_name`, `old_os_version`: `null`
+- `new_os_id`, `new_os_name`, `new_os_version`: Set to initial OS
+
+### 2. OS Changed
+Recorded when a server's operating system is updated.
+- Both old and new OS fields are populated
+
+### 3. Deleted
+Recorded when a server is removed.
+- `new_os_id`, `new_os_name`, `new_os_version`: `null`
+- `old_os_id`, `old_os_name`, `old_os_version`: Set to final OS state
+
+**Note:** Change history is tracked automatically via database triggers. No manual API calls are needed to create history records.
+
+---
+
 ## Future Enhancements
 
 - Authentication and authorization
@@ -531,4 +679,6 @@ The current API does not implement pagination. For large datasets, pagination sh
 - Webhook notifications for compliance issues
 - Bulk operations
 - API versioning
+- User tracking in change history (who made the change)
+- Webhook notifications for real-time change alerts
 - OpenAPI/Swagger documentation

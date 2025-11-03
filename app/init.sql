@@ -161,3 +161,129 @@ CREATE TRIGGER update_servers_updated_at
     BEFORE UPDATE ON servers
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Create the server_change_history table
+CREATE TABLE IF NOT EXISTS server_change_history (
+    id SERIAL PRIMARY KEY,
+    server_id INTEGER,
+    server_name VARCHAR(255) NOT NULL,
+    change_type VARCHAR(50) NOT NULL, -- 'created', 'os_changed', 'deleted'
+    old_os_id INTEGER,
+    new_os_id INTEGER,
+    old_os_name VARCHAR(100),
+    old_os_version VARCHAR(100),
+    new_os_name VARCHAR(100),
+    new_os_version VARCHAR(100),
+    changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE SET NULL,
+    FOREIGN KEY (old_os_id) REFERENCES operating_systems(id) ON DELETE SET NULL,
+    FOREIGN KEY (new_os_id) REFERENCES operating_systems(id) ON DELETE SET NULL
+);
+
+-- Create indexes for better query performance on change history
+CREATE INDEX IF NOT EXISTS idx_change_history_server_id ON server_change_history(server_id);
+CREATE INDEX IF NOT EXISTS idx_change_history_change_type ON server_change_history(change_type);
+CREATE INDEX IF NOT EXISTS idx_change_history_changed_at ON server_change_history(changed_at);
+
+-- Create a function to log server creation
+CREATE OR REPLACE FUNCTION log_server_creation()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO server_change_history (
+        server_id,
+        server_name,
+        change_type,
+        new_os_id,
+        new_os_name,
+        new_os_version
+    )
+    SELECT
+        NEW.id,
+        NEW.name,
+        'created',
+        NEW.os_id,
+        os.name,
+        os.version
+    FROM operating_systems os
+    WHERE os.id = NEW.os_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+-- Create a function to log OS changes
+CREATE OR REPLACE FUNCTION log_server_os_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only log if os_id actually changed
+    IF OLD.os_id != NEW.os_id THEN
+        INSERT INTO server_change_history (
+            server_id,
+            server_name,
+            change_type,
+            old_os_id,
+            new_os_id,
+            old_os_name,
+            old_os_version,
+            new_os_name,
+            new_os_version
+        )
+        SELECT
+            NEW.id,
+            NEW.name,
+            'os_changed',
+            OLD.os_id,
+            NEW.os_id,
+            old_os.name,
+            old_os.version,
+            new_os.name,
+            new_os.version
+        FROM operating_systems old_os, operating_systems new_os
+        WHERE old_os.id = OLD.os_id AND new_os.id = NEW.os_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+-- Create a function to log server deletion
+CREATE OR REPLACE FUNCTION log_server_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO server_change_history (
+        server_id,
+        server_name,
+        change_type,
+        old_os_id,
+        old_os_name,
+        old_os_version
+    )
+    SELECT
+        OLD.id,
+        OLD.name,
+        'deleted',
+        OLD.os_id,
+        os.name,
+        os.version
+    FROM operating_systems os
+    WHERE os.id = OLD.os_id;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE 'plpgsql';
+
+-- Create triggers for logging server changes
+CREATE TRIGGER log_server_creation_trigger
+    AFTER INSERT ON servers
+    FOR EACH ROW
+    EXECUTE FUNCTION log_server_creation();
+
+CREATE TRIGGER log_server_os_change_trigger
+    AFTER UPDATE ON servers
+    FOR EACH ROW
+    EXECUTE FUNCTION log_server_os_change();
+
+CREATE TRIGGER log_server_deletion_trigger
+    BEFORE DELETE ON servers
+    FOR EACH ROW
+    EXECUTE FUNCTION log_server_deletion();

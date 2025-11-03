@@ -312,19 +312,60 @@ func (u *ComplianceUtils) GetRecommendations(servers []Server, allOS []OS) []str
 			fmt.Sprintf("WARNING: %d servers are running operating systems that will reach end-of-life within 6 months", len(endingSoonServers)))
 	}
 
-	// Find OS families with newer versions available
-	latestVersions := u.osUtils.GetLatestVersionByFamily(allOS)
-	osDistribution := u.serverUtils.GetOSDistribution(servers)
+	// Group all OS by family to find the one with the latest EndOfSupport date
+	groupedOS := u.osUtils.GroupOSByFamily(allOS)
 
-	for osVersion, count := range osDistribution {
-		// This is a simplified check - in practice, you'd want more sophisticated version comparison
-		for family, latest := range latestVersions {
-			latestKey := fmt.Sprintf("%s %s", latest.Name, latest.Version)
-			if osVersion != latestKey && latest.Name == family {
-				recommendations = append(recommendations,
-					fmt.Sprintf("SUGGESTION: Consider upgrading %d servers from %s to %s", count, osVersion, latestKey))
+	// For each server, check if there's an OS in the same family with a later EndOfSupport date
+	osUpgradeNeeded := make(map[string]struct {
+		count         int
+		currentOS     string
+		recommendedOS string
+	})
+
+	for _, server := range servers {
+		if server.OS == nil {
+			continue
+		}
+
+		// Get the OS family for this server
+		osFamily := server.OS.Name
+		osKey := fmt.Sprintf("%s %s", server.OS.Name, server.OS.Version)
+
+		// Find the OS with the latest EndOfSupport date in the same family
+		if familyOSList, exists := groupedOS[osFamily]; exists {
+			var bestOS *OS
+			for i := range familyOSList {
+				if bestOS == nil || familyOSList[i].EndOfSupport.After(bestOS.EndOfSupport) {
+					bestOS = &familyOSList[i]
+				}
+			}
+
+			// If there's an OS with a later EndOfSupport date, recommend it
+			if bestOS != nil && bestOS.EndOfSupport.After(server.OS.EndOfSupport) {
+				bestOSKey := fmt.Sprintf("%s %s", bestOS.Name, bestOS.Version)
+				if entry, exists := osUpgradeNeeded[osKey]; exists {
+					entry.count++
+					osUpgradeNeeded[osKey] = entry
+				} else {
+					osUpgradeNeeded[osKey] = struct {
+						count         int
+						currentOS     string
+						recommendedOS string
+					}{
+						count:         1,
+						currentOS:     osKey,
+						recommendedOS: bestOSKey,
+					}
+				}
 			}
 		}
+	}
+
+	// Generate recommendations from the collected data
+	for _, upgrade := range osUpgradeNeeded {
+		recommendations = append(recommendations,
+			fmt.Sprintf("SUGGESTION: Consider upgrading %d servers from %s to %s",
+				upgrade.count, upgrade.currentOS, upgrade.recommendedOS))
 	}
 
 	return recommendations
